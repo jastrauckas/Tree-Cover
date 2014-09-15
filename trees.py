@@ -5,8 +5,8 @@ import scipy
 import sklearn
 from sklearn import svm, cross_validation, tree, neighbors
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.decomposition import FastICA, PCA
-
 
 '''
 helper function to get integer data from the csv reader
@@ -42,6 +42,16 @@ def loadTrainingLabels():
 	print "training labels size: " + str(trainingLabels.shape)
 	return trainingLabels
 
+def loadTestData():
+	testFile = open('test.csv')
+	reader = csv.reader(testFile, delimiter=',')
+	x = list(reader)
+	#headers = x[0]
+	x = x[1:]
+	testData = numpy.array(x).astype('float')
+	testFile.close()
+	return testData
+
 '''
 Do some processing on the raw training data so that we (hopefully) end up
 with a lower-dimensional yet still expressive feature space
@@ -76,15 +86,21 @@ def makeForest():
 	return clf
 
 '''
+relatively simple classifier, we can use this as a baseline
+'''
+def makeKNN():
+	clf = KNeighborsClassifier()
+	return clf
+
+'''
 takes in the training features and the training labels
 prints out the performance accuracy on a holdout set
 '''
-def testOnTraining(X,y):
+def testOnTraining(X,y,clf):
 	n = X.shape[0]
-	kf = cross_validation.KFold(n, n_folds=3)
+	kf = cross_validation.KFold(n, n_folds=500)
+	#kf = cross_validation.KFold(n, n) # hold one out
 
-	clf = makeSVM()
-	
 	accuracies = []
 	for train_index, test_index in kf:
 		X_train, X_test = X[train_index], X[test_index]
@@ -95,21 +111,39 @@ def testOnTraining(X,y):
 
 	ave_accuracy = sum(accuracies)/len(accuracies)
 	print "%f performance accuracy" % ave_accuracy
+	return clf
 
-def train():
-	print "Full training not yet implemented"
+'''
+write out a file with the predicted labels of the test set
+'''
+def createPredictions(feats_train,label_train,feats_test,pid_col,clf):
+	clf.fit(feats_train,label_train)
+	predictions = clf.predict(feats_test)
+	filename = "covertype_submission.csv"
+	with open(filename,"wb") as csvfile:
+		writer = csv.writer(csvfile)
+		writer.writerow(["Id","Prediction"])
+		for pred,pid in zip(predictions.astype(int), pid_col.astype(int)):
+			writer.writerow([pid,pred])
 
-def test():
-	print "Full testing not yet implemented"
 
+def train(X_train, y_train, clf):
+	clf.fit(X_train, y_train)
+	return clf
 
 def main():
 	X = loadTrainingData()
 	y = loadTrainingLabels()
-	X2 = generateFeatures(X)
-	X3 = sklearn.preprocessing.normalize(X2)
-	print X3.shape
-	testOnTraining(X3,y)
+	T = loadTestData()
+	id_test = T[:,0]
+	X_test = T[:,1:]
+	#X = generateFeatures(X)
+	#X = sklearn.preprocessing.normalize(X)
+	#print X.shape
+	clf = makeKNN()
+	testOnTraining(X, y, clf)
+	train(X, y, clf)
+	createPredictions(X, y, X_test, id_test, clf)
 	return 0
 
 if __name__ == "__main__":
